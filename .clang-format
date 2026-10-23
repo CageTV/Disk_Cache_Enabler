@@ -1,0 +1,56 @@
+---
+# Last Update: 2021-11-30T01:03:00Z
+Language: Cpp
+AccessModifierOffset: "-2"
+AlignAfterOpenBracket: "AlwaysBreak"
+AlignConsecutiveAssignments: "true"
+AlignConsecutiveDeclarations: "true"
+AlignConsecutiveMacros: "true"
+AllowShortBlocksOnASingleLine: "false"
+AllowShortFunctionsOnASingleLine: "None"
+AlwaysBreakTemplateDeclarations: "true"
+BinPackArguments: "false"
+BinPackParameters: "false"
+BreakBeforeBraces: "Custom"
+BreakBeforeTernaryOperators: "true"
+BreakConstructorInitializers: "BeforeComma"
+# https://reviews.llvm.org/D43015
+# Some IDEs or editors using older version of clang-format
+# BreakInheritanceList: 'BeforeComma'
+ColumnLimit: "80"
+CompactNamespaces: "true"
+DerivePointerAlignment: "false"
+FixNamespaceComments: "true"
+IncludeBlocks: Regroup
+IndentPPDirectives: AfterHash
+IndentWidth: "2"
+NamespaceIndentation: "None"
+# https://github.com/llvm-mirror/clang/blob/release_90/lib/Format/WhitespaceManager.cpp#L580-L585
+# This parameter is broken. Please always put pointer operators at the right side.
+#
+# e.g:
+# void       *myVoidPtr;
+# MyDataType *myDataPtr;
+#
+# PointerAlignment: 'Right'
+ReflowComments: "true"
+SpaceBeforeAssignmentOperators: "true"
+SpacesInConditionalStatement: "true"
+# We recommened to follow this format but we don't force to yet.
+# SpacesInParentheses: 'true'
+TabWidth: "2"
+UseTab: Never
+
+BraceWrapping:
+  {
+    AfterClass: "true",
+    AfterControlStatement: "true",
+    AfterEnum: "true",
+    AfterExternBlock: "false",
+    AfterFunction: "true",
+    AfterNamespace: "false",
+    AfterStruct: "true",
+    AfterUnion: "true",
+    BeforeCatch: "true",
+    BeforeElse: "true",
+  }
