@@ -12,9 +12,13 @@
 
 #define SKSEAPI extern "C" __declspec(dllexport)
 
-#define PLUGINNAME    "Skyrim Disk Cache Enabler"
-#define PLUGINVERSION 1 << 8 | 1
+#define PLUGINNAME "Skyrim Disk Cache Enabler"
+// SKSE's MAKE_EXE_VERSION layout: major 8 bits, minor 8 bits, build 12 bits
+#define PLUGINVERSION ((1 & 0xFF) << 24 | (2 & 0xFF) << 16 | (0 & 0xFFF) << 4)
 
+// This plugin never touches game memory, it only wraps kernel32's CreateFileA, so it does not depend on
+// any game version. kVersionIndependent_Signatures tells SKSE to skip the compatibleVersions check, which
+// is what lets it load on every runtime from 1.5.97 up to 1.7.x.
 SKSEAPI const SKSEPluginVersionData SKSEPlugin_Version = {
     SKSEPluginVersionData::kVersion,
     PLUGINVERSION,
@@ -23,10 +27,7 @@ SKSEAPI const SKSEPluginVersionData SKSEPlugin_Version = {
     "",
     SKSEPluginVersionData::kVersionIndependentEx_NoStructUse,
     SKSEPluginVersionData::kVersionIndependent_Signatures,
-    {RUNTIME_VERSION_1_6_659_GOG,
-     RUNTIME_VERSION_1_6_640,
-     RUNTIME_VERSION_1_5_97,
-     0},
+    {0},
     0};
 
 static HANDLE(WINAPI *CreateFileA_orig)(
@@ -38,7 +39,7 @@ static HANDLE(WINAPI *CreateFileA_orig)(
     DWORD                 dwFlagsAndAttribtes,
     HANDLE                hTemplateFile) = CreateFileA;
 
-HANDLE CreateFileA_hook(
+static HANDLE WINAPI CreateFileA_hook(
     LPCSTR                lpFilename,
     DWORD                 dwDesiredAccess,
     DWORD                 dwShareMode,
@@ -47,10 +48,9 @@ HANDLE CreateFileA_hook(
     DWORD                 dwFlagsAndAttribtes,
     HANDLE                hTemplateFile)
 {
+  // Let the OS file cache hold what the game reads (archives are read in small, random chunks)
   dwFlagsAndAttribtes &= ~(FILE_FLAG_NO_BUFFERING | FILE_FLAG_SEQUENTIAL_SCAN);
   dwFlagsAndAttribtes |= FILE_FLAG_RANDOM_ACCESS;
-
-  printf("CreateFileA: %s\n", lpFilename);
 
   return CreateFileA_orig(
       lpFilename,
@@ -71,49 +71,32 @@ SKSEAPI bool SKSEPlugin_Query(const SKSEInterface *skse, PluginInfo *info)
   return true;
 }
 
+// Installed from the plugin load callback, not DllMain: Detours suspends and resumes threads while it
+// patches, which is not something to do under the loader lock.
 SKSEAPI bool SKSEPlugin_Load(const SKSEInterface *skse)
 {
-  // FILE *stdof;
-  // AllocConsole();
-  // freopen_s(&stdof, "CONOUT$", "w", stdout);
+  DetourTransactionBegin();
+  DetourUpdateThread(GetCurrentThread());
+  DetourAttach(&(PVOID &)CreateFileA_orig, CreateFileA_hook);
+  LONG error = DetourTransactionCommit();
+
+  if ( error != NO_ERROR )
+  {
+    OutputDebugStringA("Disk Cache Enabler: CreateFileA() hook failed\n");
+    MessageBoxA(NULL, "Failed to attach!", "Disk Cache Enabler", MB_OK);
+    return false;
+  }
+
   return true;
 }
 
-BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD dwReason, LPVOID TESVIWhen)
+// DllMain only has to be a harmless stub: no work on attach, nothing to undo on detach (the process is
+// exiting, and detouring back under the loader lock can deadlock)
+BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD dwReason, LPVOID reserved)
 {
-  LONG error;
-
-  if ( DetourIsHelperProcess() )
+  if ( dwReason == DLL_PROCESS_ATTACH )
   {
-    return TRUE;
-  }
-
-  switch ( dwReason )
-  {
-  case DLL_PROCESS_ATTACH:
-    DetourRestoreAfterWith();
-    DetourTransactionBegin();
-    DetourUpdateThread(GetCurrentThread());
-    DetourAttach(&(PVOID &)CreateFileA_orig, CreateFileA_hook);
-    error = DetourTransactionCommit();
-
-    if ( error == NO_ERROR )
-    {
-      puts("CreateFileA() Hooked");
-    }
-    else
-    {
-      MessageBoxA(NULL, "Failed to attach!", "Disk Cache Enabler", MB_OK);
-      puts("CreateFileA() Hook failed");
-    }
-    break;
-  case DLL_PROCESS_DETACH:
-    DetourTransactionBegin();
-    DetourUpdateThread(GetCurrentThread());
-    DetourDetach(&(PVOID &)CreateFileA_orig, CreateFileA_hook);
-    error = DetourTransactionCommit();
-
-    break;
+    DisableThreadLibraryCalls(hInstance);
   }
   return TRUE;
 }
